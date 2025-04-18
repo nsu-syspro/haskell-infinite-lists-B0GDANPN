@@ -3,9 +3,9 @@
 
 module Task3 where
 
-import Task2 (Stream)
-import Data.Ratio (Ratio)
-
+import Task2 (Stream(..), fromList)
+import Data.Ratio (Ratio, numerator)
+import Prelude hiding ((**))
 -- | Power series represented as infinite stream of coefficients
 -- 
 -- For following series
@@ -32,6 +32,7 @@ newtype Series a = Series
   --   @a0, a1, a2, ...@
   }
 
+
 -- | Power series corresponding to single @x@
 --
 -- First 10 coefficients:
@@ -40,8 +41,17 @@ newtype Series a = Series
 -- [0,1,0,0,0,0,0,0,0,0]
 --
 x :: Num a => Series a
-x = error "TODO: define x"
+x = Series (fromList 0 [0,1])
 
+
+mapStream :: (a -> b) -> Stream a -> Stream b
+mapStream f (Stream a as) = Stream (f a) (mapStream f as)
+
+addStreams :: Num a => Stream a -> Stream a -> Stream a
+addStreams (Stream a as) (Stream b bs) = Stream (a + b) (addStreams as bs)
+
+subStreams :: Num a => Stream a -> Stream a -> Stream a
+subStreams (Stream a as) (Stream b bs) = Stream (a - b) (subStreams as bs)
 -- | Multiplies power series by given number
 -- 
 -- For following series
@@ -56,9 +66,38 @@ x = error "TODO: define x"
 -- >>> coefficients (2 *: ((1 + x)^5))
 -- [2,10,20,20,10,2,0,0,0,0]
 --
+
 infixl 7 *:
+(**) :: Num a => a -> Stream a -> Stream a 
+(**) n (Stream a b) = Stream (n*a) (n ** b)
+
 (*:) :: Num a => a -> Series a -> Series a
-(*:) = error "TODO: define (*:)"
+(*:) n (Series a)= Series (n ** a)
+instance Num a => Num (Series a) where
+  fromInteger n      = Series (fromList 0 [fromInteger n])
+  negate (Series s)  = Series (mapStream negate s)
+  (Series s1) + (Series s2) = Series (addStreams s1 s2)
+  (Series s1) * (Series s2) = Series (mul s1 s2)
+    where
+      -- power-series multiplication: (a0 + x A') * (b0 + x B')
+      mul (Stream a0 as) sb@(Stream b0 bs) =
+        let headCoeff = a0 * b0
+            tailStream = addStreams (mapStream (a0 *) bs) (mul as sb)
+        in  Stream headCoeff tailStream
+  abs = id
+  signum _ = Series (fromList 0 [1])
+
+
+instance Fractional a => Fractional (Series a) where
+  fromRational r   = Series (fromList 0 [fromRational r])
+  (Series sa) / (Series sb) = Series (divide sa sb)
+    where
+      -- power-series division A/B = c0 + x*(rest/B)
+      divide (Stream a0 as) s@(Stream b0 bs) =
+        let c0 = a0 / b0
+            remainder = subStreams as (mapStream (c0 *) bs)
+            tailStream = divide remainder s
+        in  Stream c0 tailStream
 
 -- | Helper function for producing integer
 -- coefficients from generating function
@@ -70,7 +109,7 @@ infixl 7 *:
 -- [2,3,0,0,0,0,0,0,0,0]
 --
 gen :: Series (Ratio Integer) -> Stream Integer
-gen = error "TODO: define gen"
+gen (Series s) = mapStream numerator s
 
 -- | Returns infinite stream of ones
 --
@@ -80,7 +119,7 @@ gen = error "TODO: define gen"
 -- [1,1,1,1,1,1,1,1,1,1]
 --
 ones :: Stream Integer
-ones = error "TODO: define ones"
+ones = gen (1 / (1 - x))
 
 -- | Returns infinite stream of natural numbers (excluding zero)
 --
@@ -90,7 +129,7 @@ ones = error "TODO: define ones"
 -- [1,2,3,4,5,6,7,8,9,10]
 --
 nats :: Stream Integer
-nats = error "TODO: define nats (Task3)"
+nats = gen (1 / ((1 - x) * (1 - x)))
 
 -- | Returns infinite stream of fibonacci numbers (starting with zero)
 --
@@ -100,5 +139,5 @@ nats = error "TODO: define nats (Task3)"
 -- [0,1,1,2,3,5,8,13,21,34]
 --
 fibs :: Stream Integer
-fibs = error "TODO: define fibs (Task3)"
+fibs = gen (x / (1 - x - x * x))
 
